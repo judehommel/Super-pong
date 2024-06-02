@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+    <html>
+    <body style="margin:0; padding:0;" oncontextmenu="return false;">
+  <canvas id="canvas" width="1364" height="642" style="border:1px solid grey"></canvas>
+  <script> 
+const canvas = document.getElementById ("canvas");
+const ctx = canvas.getContext ("2d");
+
+var e = window.event;
+
+var keyW = false;
+var keyS = false;
+var keyA = false;
+var keyD = false;
+var keyZ = false;
+
+var keyUP = false;
+var keyDOWN = false;
+var keyLEFT = false;
+var keyRIGHT = false;
+var keySLASH = false;
+
+var debugValue = 0;
+
+var mousePressed = 0;
+var mouseReleased = 0;
+
+var rightButtonPressed = 0;
+
+var counter = 0;
+
+var deltaTime;
+
+function sleep(delay) {
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + delay);
+}
+
+function randn_bm() {
+  let u = 0, v = 0;
+  while(u === 0) u = Math.random(); //Converting [0,1) to (0,1)
+  while(v === 0) v = Math.random();
+  let num = Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+  num = num / 10.0 + 0.5; // Translate to 0 -> 1
+  if (num > 1 || num < 0) return randn_bm() // resample between 0 and 1
+  return num
+}
+
+function getRandomInt(min, max) {
+  const minCeiled = Math.ceil(min);
+  const maxFloored = Math.floor(max);
+  return Math.floor(Math.random() * (maxFloored - minCeiled) + minCeiled); // The maximum is exclusive and the minimum is inclusive
+}
+
+function randomPlayer()
+{
+    if(Math.floor(Math.random() * 2) === 1)
+    {
+        return rPlayer;
+    }
+    return lPlayer;
+}
+
+function lineCircle(x1, y1, x2, y2, cx, cy, r)
+{
+    if((x1 > cx-r && x1 < cx+r && y1 > cy-r && y1 < cy+r) || x2 > cx-r && x2 < cx+r && y2 > cy-r && y2 < cy+r)
+        return true;
+        
+    // get length of the line
+    var distX = x1 - x2;
+    var distY = y1 - y2;
+    var len = Math.sqrt((distX*distX) + (distY*distY));
+
+    // get dot product of the line and circle
+    var dot = (((cx-x1)*(x2-x1)) + ((cy-y1)*(y2-y1))) / Math.pow(len,2);
+
+    // find the closest point on the line
+    var closestX = x1 + (dot * (x2-x1));
+    var closestY = y1 + (dot * (y2-y1));
+    
+    // get distance to closest point
+    distX = closestX - cx;
+    distY = closestY - cy;
+    var distance = Math.sqrt( (distX*distX) + (distY*distY) );
+
+    if ((distance <= r) && ((cx < Math.max(x1, x2) && cx > Math.min(x1, x2)) || (cy < Math.max(y1, y2) && cy > Math.min(y1, y2))))
+        return true;
+    return false;
+}
+
+var buttons = [];
+
+class levelManager {
+    constructor(value)
+    {
+        this.value = value;
+        this.round = 1;
+        
+        this.firstTime = 0;
+        
+        this.spawnerCooldown = 1;
+    }
+    
+    draw()
+    {
+        ctx.fillStyle = "#000000";
+        ctx.beginPath();
+        ctx.rect(0, 0, canvas.width, canvas.height);
+        ctx.fill();
+        
+        if(this.value === "game")
+        {
+            if(this.firstTime === 0)
+            {
+                counter = 0;
+                this.firstTime++;
+            }
+
+            if(rPlayer.score > ((this.round-1)*2 + 5)-1 || lPlayer.score > ((this.round-1)*2 + 5)-1)
+            {
+                if(counter < 3) //Display current menu
+                {
+                    ctx.textAlign = "center";
+        
+                    ctx.fillStyle = "#FFFFFF";
+                    ctx.font = "50px Trebuchet MS";
+                    ctx.fillText("Buy Phase", canvas.width/2, canvas.height/2);
+                }
+            }
+            else
+            {
+                if(counter < 3) //Display current round
+                {
+                    ctx.textAlign = "center";
+        
+                    ctx.fillStyle = "#FFFFFF";
+                    ctx.font = "50px Trebuchet MS";
+                    ctx.fillText("Round " + this.round, canvas.width/2, canvas.height/2);
+                    
+                    if(lPlayer.upgrades.includes("Hard Mode 10") && rPlayer.upgrades.includes("Hard Mode 10"))
+                    {
+                        ctx.fillStyle = "#FF0000";
+                        ctx.font = "50px Trebuchet MS";
+                        ctx.fillText("Hard Mode", canvas.width/2, canvas.height - (canvas.height/3));
+                    }
+                }
+                else //Gameplay
+                {
+                    for(var i = 0; i < canvas.height; i+=61.1)
+                    {
+                        ctx.fillStyle = "#FFFFFF";
+                        ctx.beginPath();
+                        ctx.rect((canvas.width/2) - 3, i, 6, 30);
+                        ctx.fill();
+                    }
+                    
+                    for(var i = 0; i < powerUps.length; i++)
+                    {
+                        powerUps[i].draw();
+                    }
+                    
+                    for(var i = 0; i< pingPong.length; i++)
+                    {
+                        pingPong[i].draw();
+                    }
+                    rPlayer.draw();
+                    lPlayer.draw();
+                }
+            }
+        }
+
+        if(this.value === "buy")
+        {
+            for(var i = 0; i < buttons.length; i++)
+            {
+                buttons[i].draw();
+            }
+            
+            rPlayer.drawCursor();
+            lPlayer.drawCursor();
+            
+            ctx.textAlign = "end";
+            ctx.fillStyle = "#9097FF";
+            ctx.font = "30px monospace";
+            ctx.fillText("Points: " + rPlayer.points, canvas.width - 20, 50);
+            
+            ctx.textAlign = "start";
+            ctx.fillStyle = "#FE5F5F";
+            ctx.font = "30px monospace";
+            ctx.fillText("Points: " + lPlayer.points, 20, 50);
+        }
+    }
+    
+    update()
+    {
+        if(this.value === "game")
+        {
+            if(rPlayer.score > ((this.round-1)*2 + 5)-1 || lPlayer.score > ((this.round-1)*2 + 5)-1)
+            {
+                if(counter > 3) //Set buy phase values
+                {
+                    lPlayer.points += lPlayer.score;
+                    rPlayer.points += rPlayer.score;
+                    lPlayer.score = 0;
+                    rPlayer.score = 0;
+                    this.value = "buy";
+                    this.init_level();
+                }
+            }
+            else
+            {
+                for(var i = 0; i < pingPong.length; i++)
+                {
+                    if(randPlayer.keySelect && counter > 4 && pingPong[i].launched === false)
+                    {
+                        pingPong[i].init_launch();
+                        pingPong[i].launched = true;
+                    }
+                    if(pingPong[i].launched)
+                    {
+                        pingPong[i].updateCollision();
+                        for(var i = 0; i < powerUps.length; i++)
+                        {
+                            powerUps[i].update();
+                        }
+                    }
+                    else
+                    {
+                        for(var i = 0; i < pingPong.length; i++)
+                        {
+                            pingPong[i].y = randPlayer.y + randPlayer.len/2;
+                        }
+                    }
+                }
+            }
+            
+            if(rPlayer.totalScore > lPlayer.totalScore)
+            {
+                losingTeam = lPlayer.team;
+            }
+            else if(rPlayer.totalScore < lPlayer.totalScore)
+            {
+                losingTeam = rPlayer.team;
+            }
+            
+            if(pingPong[0].launched)
+            {
+                if(this.spawnerCooldown < 0)
+                {
+                    powerUps.push(new powerUpSpawner());
+                    this.spawnerCooldown = 30;
+                }
+                else
+                {
+                    this.spawnerCooldown -= deltaTime;
+                }
+            }
+            
+            rPlayer.updatePaddle();
+            lPlayer.updatePaddle();
+            rPlayer.updateUpgrades()
+            lPlayer.updateUpgrades()
+            for(var i = 0; i < pingPong.length; i++)
+            {
+                pingPong[i].updateUpgrades();
+            }
+        }   
+        else if(this.value === "buy")
+        {
+            for(var i = 0; i < buttons.length; i++)
+            {
+                buttons[i].update();
+            }
+            
+            rPlayer.updateCursor();
+            lPlayer.updateCursor();
+        }
+    }
+    
+    init_level()
+    {
+        if(this.value === "game")
+        {
+            pingPong = [];
+            
+            randPlayer = randomPlayer();
+
+            pingPong.push(new ball(randPlayer.x - (20*randPlayer.team), randPlayer.y + randPlayer.len/2));
+            if(rPlayer.upgrades.includes("Another Ball 20"))
+            {
+                pingPong.push(new ball(randPlayer.x - 20, randPlayer.y + randPlayer.len/2));
+            }
+            if(lPlayer.upgrades.includes("Another Ball 20"))
+            {
+                pingPong.push(new ball(randPlayer.x + 20, randPlayer.y + randPlayer.len/2));
+            }
+        }
+        if(this.value === "buy")
+        {
+            buttons.push(new button((canvas.width/2), 100, 100, 80, "Finish Buying  "));
+            buttons.push(new button((canvas.width/2)-100, 300, 80, 80, "Longer Paddle 5"));
+            buttons.push(new button((canvas.width/2)+100, 300, 80, 80, "Faster Ball 8"));
+            buttons.push(new button((canvas.width/2)+100, 400, 80, 80, "Another Ball 20"));
+            buttons.push(new button((canvas.width/2), 300, 80, 80, "Faster Paddle 5"));
+
+            buttons.push(new button(canvas.width - 100, canvas.height - 150, 100, 80, "Hard Mode 10"));
+        }
+    }
+}
+
+class button {
+    constructor(x, y, w, h, buttonID)
+    {
+        this.x = x-w/2;
+        this.y = y-h/2;
+        this.w = w;
+        this.h = h;
+        this.buttonID = buttonID;
+        
+        this.words = this.buttonID.split(' ');
+        
+        this.leftHovered = false;
+        this.rightHovered = false;
+    }
+    
+    draw()
+    {
+        if(this.leftHovered)
+        {
+            ctx.fillStyle = "#FF0000";
+            ctx.beginPath();
+            ctx.rect(this.x-5, this.y+5, this.w, this.h);
+            ctx.fill();
+        }
+        
+        if(this.rightHovered)
+        {
+            ctx.fillStyle = "#4343E8";
+            ctx.beginPath();
+            ctx.rect(this.x+5, this.y-5, this.w, this.h);
+            ctx.fill();
+        }
+        
+        ctx.fillStyle = "#FFFFFF";
+        ctx.beginPath();
+        ctx.rect(this.x, this.y, this.w, this.h);
+        ctx.fill();
+        
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#000000";
+        ctx.font = "15px monospace";
+        ctx.fillText(this.words[2], this.x + this.w/2, this.y + this.h/6);
+        ctx.fillText(this.words[0], this.x + this.w/2, this.y + this.h/2.5);
+        ctx.fillText(this.words[1], this.x + this.w/2, this.y + this.h/1.5);
+        
+        if(lPlayer.upgrades.includes(this.buttonID))
+        {
+            ctx.fillStyle = "#FF0000";
+            ctx.beginPath();
+            ctx.arc(this.x + 10, this.y + this.h - 10, 3, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+        if(rPlayer.upgrades.includes(this.buttonID))
+        {
+            ctx.fillStyle = "#4343E8";
+            ctx.beginPath();
+            ctx.arc(this.x + this.w - 10, this.y + 10, 3, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+    }
+    
+    update()
+    {
+        if(lPlayer.cursorX < this.x + this.w && lPlayer.cursorX > this.x && lPlayer.cursorY < this.y + this.h && lPlayer.cursorY > this.y)
+        {
+            this.leftHovered = true;
+        }
+        else
+        {
+            this.leftHovered = false;
+        }
+        
+        if(rPlayer.cursorX < this.x + this.w && rPlayer.cursorX > this.x && rPlayer.cursorY < this.y + this.h && rPlayer.cursorY > this.y)
+        {
+            this.rightHovered = true;
+        }
+        else
+        {
+            this.rightHovered = false;
+        }
+        
+        if(this.buttonID === "Finish Buying  " && this.leftHovered && this.rightHovered)
+        {
+            level.value = "game";
+            level.round++;
+            level.firstTime = 0;
+            level.init_level();
+            
+            rPlayer.cursorX = canvas.width/2;
+            rPlayer.cursorY = 200;
+            lPlayer.cursorX = canvas.width/2;
+            lPlayer.cursorY = 200;
+        }
+        else
+        {
+            lPlayer.buys(this.leftHovered, this.buttonID, this.words[2]);
+        
+            rPlayer.buys(this.rightHovered, this.buttonID, this.words[2]);
+            
+            if(this.buttonID === "Hard Mode 10")
+            {
+                level.round = 1;
+            }
+        }
+    }
+}
+
+class paddle {
+    constructor(team)
+    {
+        this.team = team;
+        this.x = canvas.width/2 + (650 * team);
+        this.y = canvas.height/2;
+        this.len = 80;
+        this.thickness = 10;
+        
+        this.baseSpeed = 200;
+        this.speed = this.baseSpeed;
+        
+        this.score = 0;
+        this.scoreX = canvas.width/2 + (100 * team);
+        this.scoreY = 100;
+        
+        this.points = 0;
+        this.totalScore = 0;
+        
+        this.upgrades = [];
+        this.activePowerup = -1;
+        
+        this.cursorX = canvas.width/2;
+        this.cursorY = 200;
+
+        this.moveUP = false;
+        this.moveDOWN = false;
+        this.moveLEFT = false;
+        this.moveRIGHT = false;
+        this.keySelect = false;
+        this.inputsReversed = false;
+    }
+    
+    draw()
+    {
+        ctx.textAlign = "center";
+        
+        ctx.fillStyle = "#FFFFFF";
+        ctx.font = "50px Trebuchet MS";
+        ctx.fillText(this.score, this.scoreX, this.scoreY);
+
+        if(this.activePowerup >= 0)
+        {
+            switch(this.activePowerup) {
+            case 0:
+                ctx.strokeStyle = "#B911CC";
+                break;
+            case 1:
+                ctx.strokeStyle = "#00B600";
+                break;
+            case 2:
+                ctx.strokeStyle = "#0000FF";
+                break;
+            case 3:
+                ctx.strokeStyle = "#D50000";
+                break;
+            case 4:
+                ctx.strokeStyle = "#D2D500";
+                break;
+            default:
+                ctx.strokeStyle = "#FFFFFF";
+                break;
+            }
+
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y - 2.5);
+            ctx.lineTo(this.x, this.y + this.len + 2.5);
+            ctx.lineWidth = this.thickness + 5;
+            ctx.stroke();
+        }
+        
+        ctx.strokeStyle = "#FFFFFF";
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x, this.y + this.len);
+        ctx.lineWidth = this.thickness;
+        ctx.stroke();
+    }
+    
+    updateUpgrades()
+    {
+        debugValue = (pingPong[0].curDirection < Math.PI/2 && pingPong[0].curDirection > -Math.PI/2 && this.team === 1);
+        switch(this.activePowerup) {
+            case 0:
+                if((pingPong[0].curDirection > Math.PI/2 && pingPong[0].curDirection < Math.PI*3/2 && this.team === -1) || (pingPong[0].curDirection < Math.PI/2 && pingPong[0].curDirection > -Math.PI/2 && this.team === 1))
+                {
+                    pingPong[0].baseSpeed = 5000;
+                }
+                break;
+            case 1:
+                if(lPlayer.upgrades.includes("Hard Mode 10") && rPlayer.upgrades.includes("Hard Mode 10"))
+                {
+                    this.baseSpeed = 210;
+
+                    if(this.upgrades.includes("Faster Paddle 5"))
+                        this.baseSpeed = 235;
+                }
+                else
+                {
+                    this.baseSpeed = 260;
+
+                    if(this.upgrades.includes("Faster Paddle 5"))
+                        this.baseSpeed = 310;
+                }
+                break;
+            case 2:
+                if(lPlayer.upgrades.includes("Hard Mode 10") && rPlayer.upgrades.includes("Hard Mode 10"))
+                {
+                    this.len = 100;
+
+                    if(this.upgrades.includes("Longer Paddle 5"))
+                        this.len = 110;
+                }
+                else
+                {
+                    this.len = 120;
+
+                    if(this.upgrades.includes("Longer Paddle 5"))
+                        this.len = 130;
+                }
+                break;
+            case 3:
+                if(lPlayer.upgrades.includes("Hard Mode 10") && rPlayer.upgrades.includes("Hard Mode 10"))
+                {
+                    this.baseSpeed = 110;
+
+                    if(this.upgrades.includes("Faster Paddle 5"))
+                        this.baseSpeed = 140;
+                }
+                else
+                {
+                    this.baseSpeed = 150;
+
+                    if(this.upgrades.includes("Faster Paddle 5"))
+                        this.baseSpeed = 215;
+                }
+                break;
+            case 4:
+                this.inputsReversed = true;
+                break;
+            default:
+                this.inputsReversed = false;
+                
+                if(lPlayer.upgrades.includes("Hard Mode 10") && rPlayer.upgrades.includes("Hard Mode 10"))
+                {
+                    lPlayer.upgrades = [];
+                    lPlayer.len = 60;
+                    lPlayer.baseSpeed = 170;
+
+                    rPlayer.upgrades = [];
+                    rPlayer.len = 60;
+                    rPlayer.baseSpeed = 170;
+                    
+                    if(this.upgrades.includes("Longer Paddle 5"))
+                        this.len = 80;
+                    if(this.upgrades.includes("Faster Paddle 5"))
+                        this.baseSpeed = 200;
+                }
+                else
+                {
+                    rPlayer.len = 80;
+                    rPlayer.baseSpeed = 200;
+
+                    lPlayer.len = 80;
+                    lPlayer.baseSpeed = 200;
+
+                    if(this.upgrades.includes("Longer Paddle 5"))
+                        this.len = 100;
+                    if(this.upgrades.includes("Faster Paddle 5"))
+                        this.baseSpeed = 275;
+                }
+
+                if(lPlayer.upgrades.includes("Hard Mode 10") && rPlayer.upgrades.includes("Hard Mode 10"))
+                {
+                    pingPong[0].baseSpeed = 700;
+                    
+                    if(lPlayer.upgrades.includes("Faster Ball 8"))
+                        pingPong[0].baseSpeed = 800;
+                    if(rPlayer.upgrades.includes("Faster Ball 8"))
+                        pingPong[0].baseSpeed = 800;
+                }
+                else
+                {
+                    pingPong[0].baseSpeed = 600;
+
+                    if(lPlayer.upgrades.includes("Faster Ball 8"))
+                        pingPong[0].baseSpeed = 700;
+                    if(rPlayer.upgrades.includes("Faster Ball 8"))
+                        pingPong[0].baseSpeed = 700;
+                }
+                break;
+        }
+    }
+
+    /*
+        (each power up will make your paddle glow with a certain color)
+        (all power ups disappear after bouncing ball or scoring a goal)
+        (the losing player gets more power ups)
+        purple:                                     
+        green: make your paddle faster                        1
+        blue: lengthen your paddle                            2
+
+        red: slow your paddle                                 3
+        yellow: reverse your controls                         4
+    */ 
+
+    updatePaddle()
+    {
+        if(this.inputsReversed === false)
+        {
+            if(this.team === -1)
+            {
+                this.moveUP = keyW;
+                this.moveDOWN = keyS;
+                this.moveLEFT = keyA;
+                this.moveRIGHT = keyD;
+                this.keySelect = keyZ;
+            }
+            if(this.team === 1)
+            {
+                this.moveUP = keyUP;
+                this.moveDOWN = keyDOWN;
+                this.moveLEFT = keyLEFT;
+                this.moveRIGHT = keyRIGHT;
+                this.keySelect = keySLASH;
+            }
+        }
+        else
+        {
+            if(this.team === -1)
+            {
+                this.moveUP = keyS;
+                this.moveDOWN = keyW;
+                this.moveLEFT = keyD;
+                this.moveRIGHT = keyA;
+                this.keySelect = keyZ;
+            }
+            if(this.team === 1)
+            {
+                this.moveUP = keyDOWN;
+                this.moveDOWN = keyUP;
+                this.moveLEFT = keyRIGHT;
+                this.moveRIGHT = keyLEFT;
+                this.keySelect = keySLASH;
+            }
+        }
+
+        this.speed = this.baseSpeed * deltaTime;
+
+        if(this.moveUP === true && this.y > 0)
+        {
+            this.y -= this.speed;
+        }
+        if(this.moveDOWN === true && this.y < canvas.height-this.len)
+        {
+            this.y += this.speed;
+        }
+    }
+    
+    drawCursor()
+    {
+        if(this.team === 1)
+            ctx.fillStyle = "#4343E8";
+        if(this.team === -1)
+            ctx.fillStyle = "#FF0000";
+        ctx.beginPath();
+        ctx.arc(this.cursorX, this.cursorY, 5, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+    
+    updateCursor()
+    {
+        this.speed = 200 * deltaTime;
+
+        if(this.team === -1)
+        {
+            this.moveUP = keyW;
+            this.moveDOWN = keyS;
+            this.moveLEFT = keyA;
+            this.moveRIGHT = keyD;
+            this.keySelect = keyZ;
+        }
+        if(this.team === 1)
+        {
+            this.moveUP = keyUP;
+            this.moveDOWN = keyDOWN;
+            this.moveLEFT = keyLEFT;
+            this.moveRIGHT = keyRIGHT;
+            this.keySelect = keySLASH;
+        }
+
+        if(this.moveUP === true)
+            this.cursorY -= this.speed;
+        if(this.moveDOWN === true)
+            this.cursorY += this.speed;
+        if(this.moveLEFT === true)
+            this.cursorX -= this.speed;
+        if(this.moveRIGHT === true)
+            this.cursorX += this.speed;
+    }
+    
+    buys(hovered, upgrade, cost)
+    {
+        if(this.team === 1)
+        {
+            if(hovered && keySLASH && this.points >= cost && !this.upgrades.includes(upgrade))
+            {
+                this.upgrades.push(upgrade);
+                this.points -= cost;
+            }
+        }
+        if(this.team === -1)
+        {
+            if(hovered && keyZ && this.points >= cost && !this.upgrades.includes(upgrade))
+            {
+                this.upgrades.push(upgrade);
+                this.points -= cost;
+            }
+        }
+    }
+}
+
+class ball {
+    constructor(x, y)
+    {
+        this.x = x;
+        this.y = y;
+        this.size = 7;
+        
+        this.baseSpeed = 600;
+        this.speed = this.baseSpeed;
+        
+        this.curDirection = randn_bm() * Math.PI + (Math.PI/2*randPlayer.team);
+        
+        this.launched = false;
+        
+        this.pastBallX = this.x;
+        this.pastBallY = this.y;
+        
+        this.xVel = 0;
+        this.yVel = 0;
+        
+        this.bounceCooldownX = 0;
+        this.bounceCooldownY = 0;
+    }
+    
+    init_launch()
+    {
+        this.speed = this.baseSpeed * deltaTime;
+        this.curDirection = randn_bm() * Math.PI + (Math.PI/2*randPlayer.team);
+        
+        this.xVel = this.speed * Math.cos(this.curDirection);
+        this.yVel = this.speed * Math.sin(this.curDirection);
+    }
+    
+    draw()
+    {   
+        ctx.fillStyle = "#FFFFFF";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+    
+    updateUpgrades()
+    {
+        if(lPlayer.upgrades.includes("Hard Mode 10") && rPlayer.upgrades.includes("Hard Mode 10"))
+        {
+            this.baseSpeed = 700;
+            
+            if(lPlayer.upgrades.includes("Faster Ball 8"))
+                this.baseSpeed = 800;
+            if(rPlayer.upgrades.includes("Faster Ball 8"))
+                this.baseSpeed = 800;
+        }
+        else
+        {
+            if(lPlayer.upgrades.includes("Faster Ball 8"))
+                this.baseSpeed = 700;
+            if(rPlayer.upgrades.includes("Faster Ball 8"))
+                this.baseSpeed = 700;
+        }
+    }
+    
+    updateCollision()
+    {
+        this.speed = this.baseSpeed * deltaTime;
+
+        if(this.x < lPlayer.x && this.x > lPlayer.x - 20 && this.y > lPlayer.y && this.y < lPlayer.y + lPlayer.len && this.bounceCooldownX < 0)
+        {
+            this.curDirection = randn_bm() * Math.PI - Math.PI/2;
+            
+            this.xVel = this.speed * Math.cos(this.curDirection);
+            this.yVel = this.speed * Math.sin(this.curDirection);
+            
+            this.bounceCooldownX = 0.2;
+
+            lPlayer.activePowerup = -1;
+        }
+        else if(this.x > rPlayer.x  && this.x < rPlayer.x + 20 && this.y > rPlayer.y && this.y < rPlayer.y + rPlayer.len && this.bounceCooldownX < 0)
+        {
+            this.curDirection = randn_bm() * Math.PI + Math.PI/2;
+            
+            this.xVel = this.speed * Math.cos(this.curDirection);
+            this.yVel = this.speed * Math.sin(this.curDirection);
+
+            this.bounceCooldownX = 0.2;
+
+            rPlayer.activePowerup = -1;
+        }
+        else
+        {
+            this.bounceCooldownX-=deltaTime;
+        }
+        
+        if(this.x > canvas.width)
+        {
+            lPlayer.score++;
+            lPlayer.totalScore++;
+            this.x = rPlayer.x - 100;
+            this.y = rPlayer.y + rPlayer.len/2;
+            
+            this.curDirection = randn_bm() * Math.PI + Math.PI/2;
+            
+            this.xVel = this.speed * Math.cos(this.curDirection);
+            this.yVel = this.speed * Math.sin(this.curDirection);
+
+            if(lPlayer.activePowerup === 3 || lPlayer.activePowerup === 4)
+            {
+                lPlayer.activePowerup = -1;
+            }
+            
+            if(rPlayer.activePowerup === 3 || rPlayer.activePowerup === 4)
+            {
+                rPlayer.activePowerup = -1;
+            }
+        }
+        else if(this.x < 0)
+        {
+            rPlayer.score++;
+            rPlayer.totalScore++;
+            this.x = lPlayer.x + 100;
+            this.y = lPlayer.y + lPlayer.len/2;
+            
+            this.curDirection = randn_bm() * Math.PI - Math.PI/2;
+            
+            this.xVel = this.speed * Math.cos(this.curDirection);
+            this.yVel = this.speed * Math.sin(this.curDirection);
+
+            if(lPlayer.activePowerup === 3 || lPlayer.activePowerup === 4)
+            {
+                lPlayer.activePowerup = -1;
+            }
+            
+            if(rPlayer.activePowerup === 3 || rPlayer.activePowerup === 4)
+            {
+                rPlayer.activePowerup = -1;
+            }
+        }
+        
+        if((this.y <= 0 || this.y >= canvas.height) && this.bounceCooldownY < 0)
+        {
+            this.yVel *= -1;
+            
+            this.bounceCooldownY = 0.2;
+        }
+        else
+        {
+            this.bounceCooldownY-=deltaTime;
+        }
+    
+
+        this.x += this.xVel;
+        this.y += this.yVel;
+        
+        this.pastBallX = this.x;
+        this.pastBallY = this.y;
+    }
+}
+
+powerUps = [];
+
+class powerUpSpawner {
+    constructor()
+    {
+        if(Math.floor(Math.random() * 3) === 1)
+        {
+            this.x = canvas.width/2 + (650 * losingTeam);
+        }
+        else
+        {
+            this.x = canvas.width/2 + (650 * randomPlayer().team);
+        }
+        
+        this.y = Math.random() * canvas.height;
+        
+        this.s = 30;
+        
+        this.type = Math.floor(Math.random() * 5);
+    }
+    
+    draw()
+    {
+        switch(this.type) {
+            case 0:
+                ctx.fillStyle = "#B911CC";
+                break;
+            case 1:
+                ctx.fillStyle = "#00B600";
+                break;
+            case 2:
+                ctx.fillStyle = "#0000FF";
+                break;
+            case 3:
+                ctx.fillStyle = "#D50000";
+                break;
+            case 4:
+                ctx.fillStyle = "#D2D500";
+                break;
+
+            default: 
+                ctx.fillStyle = "#FFFFFF";
+        }
+        
+        ctx.beginPath();
+        ctx.rect(this.x - 15, this.y - 15, this.s, this.s)
+        ctx.fill();
+    }
+    
+    update()
+    {
+        if((lPlayer.y < this.y - 15 + this.s && lPlayer.y > this.y - 15 && this.x < canvas.width/2) || (lPlayer.y + lPlayer.len < this.y - 15 + this.s && lPlayer.y + lPlayer.len > this.y - 15 && this.x < canvas.width/2)) 
+        {
+            lPlayer.activePowerup = this.type;
+            for(var i = 0; i < powerUps.length; i++)
+            {
+                if(powerUps[i].y === this.y)
+                    powerUps.splice(i, 1);
+            }
+        }
+        if((rPlayer.y < this.y - 15 + this.s && rPlayer.y > this.y - 15 && this.x > canvas.width/2) || (rPlayer.y + rPlayer.len < this.y - 15 + this.s && rPlayer.y + rPlayer.len > this.y - 15 && this.x > canvas.width/2)) 
+        {
+            rPlayer.activePowerup = this.type;
+            for(var i = 0; i < powerUps.length; i++)
+            {
+                if(powerUps[i].y === this.y)
+                    powerUps.splice(i, 1);
+            }
+        }
+    }
+}
+
+var rPlayer = new paddle(1);
+var lPlayer = new paddle(-1);
+var randPlayer = randomPlayer();
+var losingTeam = randPlayer.team;
+var pingPong = [];
+pingPong.push(new ball(canvas.width/2, canvas.height/2));
+var level = new levelManager("game");
+level.init_level();
+
+var mousePressed = 0;
+var mouseReleased = 0;
+
+var rightButtonPressed = 0;
+
+document.body.onmousedown = function() {
+    mousePressed = 1;
+    mouseReleased = 0;
+}
+document.body.onmouseup = function() {
+    mouseReleased = 1;
+    mousePressed = 0;
+}
+
+window.oncontextmenu = function ()
+{
+    rightButtonPressed = 1;
+}
+
+document.body.onmousedown = function() {
+    mousePressed = 1;
+    mouseReleased = 0;
+}
+document.body.onmouseup = function() {
+    mouseReleased = 1;
+    mousePressed = 0;
+}
+
+window.oncontextmenu = function ()
+{
+    rightButtonPressed = 1;
+}
+
+document.addEventListener('keydown', function(e) {
+    if(e.keyCode === 87) {
+        keyW = true;
+    }
+    if(e.keyCode === 83) {
+        keyS = true;
+    }
+    if(e.keyCode === 65) {
+        keyA = true;
+    }
+    if(e.keyCode === 68) {
+        keyD = true;
+    }
+    if(e.keyCode === 90) {
+        keyZ = true;
+    }
+    
+    if(e.keyCode === 38) {
+        keyUP = true;
+    }
+    if(e.keyCode === 40) {
+        keyDOWN = true;
+    }
+    if(e.keyCode === 37) {
+        keyLEFT = true;
+    }
+    if(e.keyCode === 39) {
+        keyRIGHT = true;
+    }
+    if(e.keyCode === 191) {
+        keySLASH = true;
+    }
+});
+
+document.addEventListener('keyup', function(e) {
+    if(e.keyCode === 87) {
+        keyW = false;
+    }
+    if(e.keyCode === 83) {
+        keyS = false;
+    }
+    if(e.keyCode === 65) {
+        keyA = false;
+    }
+    if(e.keyCode === 68) {
+        keyD = false;
+    }
+    if(e.keyCode === 90) {
+        keyZ = false;
+    }
+    
+    if(e.keyCode === 38) {
+        keyUP = false;
+    }
+    if(e.keyCode === 40) {
+        keyDOWN = false;
+    }
+    if(e.keyCode === 37) {
+        keyLEFT = false;
+    }
+    if(e.keyCode === 39) {
+        keyRIGHT = false;
+    }
+    if(e.keyCode === 191) {
+        keySLASH = false;
+    }
+});
+
+window.addEventListener("keydown", function(e) {
+    // space and arrow keys
+    if([32, 37, 38, 39, 40].indexOf(e.keyCode) > -1) {
+        e.preventDefault();
+    }
+}, false);
+
+var mouseX;
+var mouseY;
+    
+document.addEventListener("mousemove", mouseMoveHandler, false);
+   
+function mouseMoveHandler(e) {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+}   
+
+function update(deltaTime) {
+    level.update();
+    
+    if(rightButtonPressed === 1)
+    {
+        rightButtonPressed = 0;
+    }
+
+    if(mousePressed === 1 || mouseReleased === 1)
+    {
+        mousePressed = 0;
+        mouseReleased = 0;
+    }
+    if(mouseReleased === 1)
+    {
+        rightButtonPressed = 0;
+    }
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    //Draw Here-----
+    
+    level.draw();
+    
+    //-----Draw Here
+    
+    ctx.textAlign = "left";
+    
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "20px sans-serif";
+    ctx.fillText("Debug Value: " + debugValue, canvas.width - 250, canvas.height - 50);
+}
+
+var LOW_LIMIT = 0.0167;          // Keep At/Below 60fps
+var HIGH_LIMIT = 0.1;            // Keep At/Above 10fps
+
+var lastTime = Date.now();
+
+function start() {
+    requestAnimationFrame(loop);
+}
+
+function loop(timestamp) {
+    requestAnimationFrame(loop);
+    var currentTime = Date.now();
+    deltaTime = (currentTime - lastTime) / 1000.0;
+    if (deltaTime < LOW_LIMIT)
+    {
+        deltaTime = LOW_LIMIT;
+    }
+    else if (deltaTime > HIGH_LIMIT)
+    {
+        deltaTime = HIGH_LIMIT;
+    }
+
+    lastTime = currentTime;
+
+    update(deltaTime);
+    draw();
+    
+    counter+=deltaTime;
+}
+
+start();
+</script> </body> </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
